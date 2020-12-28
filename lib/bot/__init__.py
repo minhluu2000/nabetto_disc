@@ -1,3 +1,4 @@
+from asyncio import sleep
 from datetime import datetime
 from glob import glob
 
@@ -8,6 +9,7 @@ from discord import Intents
 from discord.errors import PrivilegedIntentsRequired
 from discord import Embed, File
 from discord.ext.commands import Bot as BotBase
+from discord.ext.commands import Context
 from discord.ext.commands.errors import CommandNotFound
 
 from ..db import db
@@ -16,10 +18,24 @@ PREFIX = "+"
 OWNER_IDS = [165312160480755712]
 COGS = [path.split("/")[-1][:-3] for path in glob("./lib/cogs/*.py")]
 
+class Ready(object):
+    def __init__(self):
+        for cog in COGS:
+            setattr(self, cog, False)
+    
+    def ready_up(self, cog):
+        setattr(self, cog, True)
+        print(f" {cog} cog ready")
+
+    def all_ready(self):
+        return all([getattr(self, cog) for cog in COGS])
+
 class Bot(BotBase):
     def __init__(self):
         self.PREFIX = PREFIX
         self.ready = False
+        self.cogs_ready = Ready()
+
         self.guild = None
         self.scheduler = AsyncIOScheduler()
 
@@ -33,7 +49,7 @@ class Bot(BotBase):
     def setup(self):
         for cog in COGS:
             self.load_extension(f"lib.cogs.{cog}")
-            print(f"{cog} cog loaded")
+            print(f" {cog} cog loaded")
         
     def run(self, version):
         self.VERSION = version
@@ -47,15 +63,24 @@ class Bot(BotBase):
         print("running bot...")
         super().run(self.TOKEN, reconnect=True)
 
-    async def print_message(self):
+    async def process_commands(self, message):
+        ctx = await self.get_context(message, cls=Context)
+
+        if ctx.command is not None and ctx.guild is not None:
+            if self.ready:
+                await self.invoke(ctx)
+
+            else:
+                await ctx.send("I'm not ready to receive commands. Please wait a few seconds...")
+
+    async def important_reminder(self):
         await self.stdout.send("Remember to not feed or play Yasuo!")
 
-
     async def on_connect(self):
-        print("bot connected")
+        print(" bot connected")
 
     async def on_disconnect(self):
-        print("bot disconnected")
+        print(" bot disconnected")
 
     async def on_error(self, err, *args, **kwargs):
         if err == "on_command_error":
@@ -76,10 +101,10 @@ class Bot(BotBase):
 
     async def on_ready(self):
         if not self.ready:
-            self.ready = True
+            self.cogs_ready = Ready()
             self.guild = self.get_guild(463705436038758403)
             self.stdout = self.get_channel(792204590404993036)
-            self.scheduler.add_job(self.print_message, CronTrigger(day_of_week=0, hour=12, minute=0, second=0))
+            self.scheduler.add_job(self.important_reminder, CronTrigger(day_of_week=0, hour=12, minute=0, second=0))
             self.scheduler.start()
 
             await self.stdout.send("Now online!")
@@ -98,13 +123,18 @@ class Bot(BotBase):
             # await channel.send(embed=embed)
             # await channel.send(file=File("./data/nabetto.png"))
 
-            print("bot ready")
+            while not self.cogs_ready.all_ready():
+                await sleep(0.5)
+            
+            self.ready = True
+            print(" bot ready")
             
         else:
-            print("bot reconnected")
+            print(" bot reconnected")
 
     async def on_message(self, message):
-        pass
+        if not message.author.bot:
+            await self.process_commands(message)
 
 bot = Bot()
 

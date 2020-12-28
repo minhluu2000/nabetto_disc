@@ -6,6 +6,8 @@ name = "pypi"
 [packages]
 discord = "*"
 pylint = "*"
+aiosqlite = "*"
+apscheduler = "*"
 
 [dev-packages]
 
