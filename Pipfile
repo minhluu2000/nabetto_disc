@@ -7,9 +7,13 @@ name = "pypi"
 discord = "*"
 pylint = "*"
 aiosqlite = "*"
-apscheduler = "*"
+selenium = "*"
+datapipelines = "*"
+cassiopeia = "*"
+APScheduler = "*"
 
 [dev-packages]
 
 [requires]
 python_version = "3.8"
+

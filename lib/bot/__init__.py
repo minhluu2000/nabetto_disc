@@ -6,17 +6,17 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 from discord import Intents
-from discord.errors import PrivilegedIntentsRequired
+from discord.errors import HTTPException, PrivilegedIntentsRequired, Forbidden
 from discord import Embed, File
 from discord.ext.commands import Bot as BotBase
 from discord.ext.commands import Context
-from discord.ext.commands.errors import CommandNotFound
-
+from discord.ext.commands import (CommandNotFound, BadArgument, MissingRequiredArgument, CommandOnCooldown)
 from ..db import db
 
 PREFIX = "+"
 OWNER_IDS = [165312160480755712]
 COGS = [path.split("/")[-1][:-3] for path in glob("./lib/cogs/*.py")]
+IGNORE_EXCEPTIONS = (CommandNotFound, BadArgument)
 
 class Ready(object):
     def __init__(self):
@@ -25,7 +25,6 @@ class Ready(object):
     
     def ready_up(self, cog):
         setattr(self, cog, True)
-        print(f" {cog} cog ready")
 
     def all_ready(self):
         return all([getattr(self, cog) for cog in COGS])
@@ -86,16 +85,26 @@ class Bot(BotBase):
         if err == "on_command_error":
             await args[0].send("Something went wrong.")
 
-        await self.stdout.send("An error occured.")
+        await self.stdout.send("An error occurred.")
         raise
 
     async def on_command_error(self, ctx, exc):
-        if isinstance(exc, CommandNotFound):
+        if any([isinstance(exc, error) for error in IGNORE_EXCEPTIONS]):
             pass
 
-        elif hasattr(exc, "original"):
-            raise exc.original
+        elif isinstance(exc, MissingRequiredArgument):
+            await ctx.send("One or more required arguments are missing.")
+        
+        elif isinstance(exc, CommandOnCooldown):
+            await ctx.send(f"That command is on {str(exc.cooldown.type).split('.')[-1]} cooldown. Try again in {exc.retry_after:,.2f} secs.")
 
+        elif hasattr(exc, "original"):
+            
+            if isinstance(exc.original, Forbidden):
+                await ctx.send("I do not have permission to do that.")
+
+            else: 
+                raise exc.original
         else:
             raise exc
 
